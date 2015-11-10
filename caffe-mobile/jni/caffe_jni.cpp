@@ -1,9 +1,7 @@
-#include <string.h>
 #include <jni.h>
 #include <android/log.h>
 #include <string>
 
-#include "caffe/caffe.hpp"
 #include "caffe_mobile.hpp"
 
 #define  LOG_TAG    "MiRA-CNN"
@@ -13,11 +11,14 @@
 #define  LOGW(...)  __android_log_print(ANDROID_LOG_WARN,LOG_TAG, __VA_ARGS__)
 #define  LOGE(...)  __android_log_print(ANDROID_LOG_ERROR,LOG_TAG, __VA_ARGS__)
 
-#ifdef __cplusplus
 extern "C" {
-#endif
 
-caffe::CaffeMobile *caffe_mobile;
+#define jni_funcname(name) Java_com_caffe_android_CaffeMobile##name
+
+using caffe::string;
+using vector;
+
+caffe::CaffeMobile *caffe_mobile = nullptr;
 
 int getTimeSec();
 
@@ -52,34 +53,95 @@ static int start_logger() {
     return 0;
 }
 
+
 void JNIEXPORT JNICALL
-Java_com_sh1r0_caffe_1android_1demo_CaffeMobile_enableLog(JNIEnv* env, jobject thiz, jboolean enabled)
+jni_funcname(enableLog)(JNIEnv* env, jobject thiz, jboolean enabled)
 {
     start_logger();
     caffe::LogMessage::Enable(enabled != JNI_FALSE);
 }
 
 jint JNIEXPORT JNICALL
-Java_com_sh1r0_caffe_1android_1demo_CaffeMobile_loadModel(JNIEnv* env, jobject thiz, jstring modelPath, jstring weightsPath)
+jni_funcname(loadModel)(JNIEnv* env, jobject thiz, jstring modelPath, jstring weightsPath)
 {
+    delete caffe_mobile;
     const char *model_path = env->GetStringUTFChars(modelPath, 0);
     const char *weights_path = env->GetStringUTFChars(weightsPath, 0);
-    caffe_mobile = new caffe::CaffeMobile(string(model_path), string(weights_path));
+    caffe_mobile = new caffe::CaffeMobile(model_path, weights_path);
     env->ReleaseStringUTFChars(modelPath, model_path);
     env->ReleaseStringUTFChars(weightsPath, weights_path);
     return 0;
 }
 
-jint JNIEXPORT JNICALL
-Java_com_sh1r0_caffe_1android_1demo_CaffeMobile_predictImage(JNIEnv* env, jobject thiz, jstring imgPath)
+jfloatArray JNIEXPORT JNICALL
+jni_funcname(predict)(JNIEnv* env, jobject thiz)
 {
+    CHECK(caffe_mobile != NULL);
+    vector<float> top = caffe_mobile->predict();
+    LOGD("Caffe: top's count is: %d.", top.size());
+
+    count = top.size();
+    jfloatArray ret_arr = env->NewFloatArray(count);
+    for(jsize i = 0; i < K; i++) {
+        ret_arr[i] = top[i];
+    }
+    return ret_arr;
+}
+
+jintArray JNIEXPORT JNICALL
+jni_funcname(predictTopK)(JNIEnv* env, jobject thiz, jstring imgPath, jint K)
+{
+    CHECK(caffe_mobile != NULL);
     const char *img_path = env->GetStringUTFChars(imgPath, 0);
-    caffe::vector<int> top_k = caffe_mobile->predict_top_k(string(img_path), 3);
+    vector<int> top_k = caffe_mobile->predict_top_k(img_path), K);
     LOGD("top-1 result: %d", top_k[0]);
 
+    K = top_k.size();
+    jintArray ret_arr = env->NewIntArray(K);
+    for(jsize i = 0; i < K; i++) {
+        ret_arr[i] = top_k[i];
+    }
     env->ReleaseStringUTFChars(imgPath, img_path);
+    return ret_arr;
+}
 
-    return top_k[0];
+jint JNIEXPORT JNICALL
+jni_funcname(setImages)(JNIEnv* env, jobject thiz, jobjectArray imgPaths)
+{
+    CHECK(caffe_mobile != NULL);
+
+    int count = env->GetArrayLength(imgPaths);
+    vector<string> img_paths;
+    for (int i = 0; i < count; i++) {
+        jstring imgPath =(jstring) (env->GetObjectArrayElement(imgPaths, i));
+        const char *img_path = env->GetStringUTFChars(imgPath, 0);
+        img_paths.push_back(img_path);
+        env->ReleaseStringUTFChars(imgPath, img_path);
+    }
+    LOGD("image count: %d", img_paths.size());
+
+    return caffe_mobile->set_images(img_paths);
+}
+
+jint JNIEXPORT JNICALL
+jni_funcname(getOutputHeight)(JNIEnv* env, jobject thiz)
+{
+    CHECK(caffe_mobile != NULL);
+    return caffe_mobile->output_height();
+}
+
+jint JNIEXPORT JNICALL
+jni_funcname(getOutputNum)(JNIEnv* env, jobject thiz)
+{
+    CHECK(caffe_mobile != NULL);
+    return caffe_mobile->output_num();
+}
+
+jdouble JNIEXPORT JNICALL
+jni_funcname(getTestTime)(JNIEnv* env, jobject thiz)
+{
+    CHECK(caffe_mobile != NULL);
+    return caffe_mobile->test_time();
 }
 
 int getTimeSec() {
@@ -121,13 +183,11 @@ int main(int argc, char const *argv[])
 
     caffe::LogMessage::Enable(true); // enable logging
     caffe_mobile = new caffe::CaffeMobile(string(argv[1]), string(argv[2]));
-    caffe::vector<int> top_3 = caffe_mobile->predict_top_k(string(argv[3]));
+    vector<int> top_3 = caffe_mobile->predict_top_k(string(argv[3]));
     for (auto k : top_3) {
         std::cout << k << std::endl;
     }
     return 0;
 }
 
-#ifdef __cplusplus
 }
-#endif

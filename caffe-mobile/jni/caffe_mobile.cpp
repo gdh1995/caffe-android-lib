@@ -16,86 +16,101 @@ using caffe::MemoryDataLayer;
 
 namespace caffe {
 
+namespace {
 template <typename T>
-vector<size_t> ordered(vector<T> const& values) {
-	vector<size_t> indices(values.size());
-	std::iota(begin(indices), end(indices), static_cast<size_t>(0));
+vector<size_t> sort_to_index(vector<T> const& values) {
+  vector<size_t> indices(values.size());
+  std::iota(begin(indices), end(indices), static_cast<size_t>(0));
 
-	std::sort(
-		begin(indices), end(indices),
-		[&](size_t a, size_t b) { return values[a] > values[b]; }
-	);
-	return indices;
+  std::sort(
+    begin(indices), end(indices),
+    [&](size_t a, size_t b) { return values[a] > values[b]; }
+  );
+  return indices;
+}
 }
 
-CaffeMobile::CaffeMobile(string model_path, string weights_path) {
-	CHECK_GT(model_path.size(), 0) << "Need a model definition to score.";
-	CHECK_GT(weights_path.size(), 0) << "Need model weights to score.";
+CaffeMobile::CaffeMobile(string model_path, string weights_path)
+  : output_height_(0), output_size_(0)
+{
+  CHECK_GT(model_path.size(), 0) << "Need a model definition to score.";
+  CHECK_GT(weights_path.size(), 0) << "Need model weights to score.";
 
-	Caffe::set_mode(Caffe::CPU);
+  Caffe::set_mode(Caffe::CPU);
 
-	clock_t t_start = clock();
-	caffe_net = new Net<float>(model_path, caffe::TEST);
-	caffe_net->CopyTrainedLayersFrom(weights_path);
-	clock_t t_end = clock();
-	LOG(DEBUG) << "Loading time: " << 1000.0 * (t_end - t_start) / CLOCKS_PER_SEC << " ms.";
+  clock_t t_start = clock();
+  caffe_net_ = new Net<float>(model_path, caffe::TEST);
+  caffe_net_->CopyTrainedLayersFrom(weights_path);
+  clock_t t_end = clock();
+  LOG(DEBUG) << "Loading time: " << 1000.0 * (t_end - t_start) / CLOCKS_PER_SEC << " ms.";
 }
 
 CaffeMobile::~CaffeMobile() {
-	free(caffe_net);
-	caffe_net = NULL;
+  free(caffe_net_);
+  caffe_net_ = NULL;
 }
 
-int CaffeMobile::test(string img_path) {
-	CHECK(caffe_net != NULL);
+int CaffeMobile::set_images(const vector<string> &img_paths) {
+  CHECK(caffe_net_ != NULL);
+  CHECK_GT(img_paths.size(), 0);
 
-	Datum datum;
-	CHECK(ReadImageToDatum(img_path, 0, 256, 256, true, &datum));
-	const shared_ptr<MemoryDataLayer<float>> memory_data_layer =
-		static_pointer_cast<MemoryDataLayer<float>>(
-			caffe_net->layer_by_name("data"));
-	memory_data_layer->AddDatumVector(vector<Datum>({datum}));
+  Datum datum;
+  vector<Datum> datumVector = new vector<Datum>(img_paths.size());
+  const shared_ptr<MemoryDataLayer<float>> memory_data_layer =
+    static_pointer_cast<MemoryDataLayer<float>>(caffe_net_->layer_by_name("data"));
+  const bool has_crop = memory_data_layer.layer_param().transform_param().crop_size() != 0,
+    is_color = memory_data_layer.channels() > 1;
+  const int height = has_crop ? 0 : memory_data_layer.height(),
+    width = has_crop ? 0 : memory_data_layer.width();
+  for (int i = 0; i < img_paths.size(); i++) {
+    CHECK(ReadImageToDatum(img_paths[i], 0, height, width, is_color, &datumVector[i]));
+  }
+  memory_data_layer->AddDatumVector(datumVector);
 
-	vector<Blob<float>* > dummy_bottom_vec;
-	float loss;
-	clock_t t_start = clock();
-	const vector<Blob<float>*>& result = caffe_net->Forward(dummy_bottom_vec, &loss);
-	clock_t t_end = clock();
-	LOG(DEBUG) << "Prediction time: " << 1000.0 * (t_end - t_start) / CLOCKS_PER_SEC << " ms.";
-
-	const float* argmaxs = result[1]->cpu_data();
-	for (int i = 0; i < result[1]->num(); i++) {
-		for (int j = 0; j < result[1]->height(); j++) {
-			LOG(INFO) << " Image: "<< i << " class:"
-			          << argmaxs[i*result[1]->height() + j];
-		}
-	}
-
-	return argmaxs[0];
+  return img_paths.size();
 }
 
-vector<int> CaffeMobile::predict_top_k(string img_path, int k) {
-	CHECK(caffe_net != NULL);
+vector<float> CaffeMobile::predict() {
+  CHECK(caffe_net_ != NULL);
 
-	Datum datum;
-	CHECK(ReadImageToDatum(img_path, 0, 256, 256, true, &datum));
-	const shared_ptr<MemoryDataLayer<float>> memory_data_layer =
-		static_pointer_cast<MemoryDataLayer<float>>(
-			caffe_net->layer_by_name("data"));
-	memory_data_layer->AddDatumVector(vector<Datum>({datum}));
+  const vector<Blob<float>*> dummy_bottom_vec;
+  float loss;
 
-	float loss;
-	vector<Blob<float>* > dummy_bottom_vec;
-	clock_t t_start = clock();
-	const vector<Blob<float>*>& result = caffe_net->Forward(dummy_bottom_vec, &loss);
-	clock_t t_end = clock();
-	LOG(DEBUG) << "Prediction time: " << 1000.0 * (t_end - t_start) / CLOCKS_PER_SEC << " ms.";
+  clock_t time = clock();
+  const Blob<float>& result = *caffe_net_->Forward(dummy_bottom_vec, &loss)[1];
+  time = clock() - time;
+  test_time_ = 1000.0 * time / CLOCKS_PER_SEC;
+  LOG(DEBUG) << "Prediction time: " << test_time_ << " ms.";
 
-	const vector<float> probs = vector<float>(result[1]->cpu_data(), result[1]->cpu_data() + result[1]->count());
-	CHECK_LE(k, probs.size());
-	vector<size_t> sorted_index = ordered(probs);
+  const vector<float> probs = vector<float>(result.cpu_data(), result.cpu_data() + result.count());
 
-	return vector<int>(sorted_index.begin(), sorted_index.begin() + k);
+  const float* result_data = result.cpu_data();
+  for (int i = 0; i < result.num(); i++) {
+    auto &log = LOG(INFO) << "  Image: "<< i << " class:";
+    for (int j = 0; j < result.height(); j++) {
+      log << " " << result_data[i * result.height() + j];
+    }
+  }
+  
+  output_height_ = result.height();
+  output_num_ = result.num();
+  vector<float> result_copy(result.count());
+  caffe_copy(result.count(), result_data, result_copy.data());
+  return result_copy;
+}
+
+vector<int> CaffeMobile::predict_top_k(const string &img_path, int k) {
+  CHECK(caffe_net_ != NULL);
+  CHECK_GE(k, 1);
+
+  set_images(vector<string>({img_path}));
+  const vector<float> &result = predict();
+  CHECK_GE(output_num_, 1);
+  CHECK_GE(output_height_, 1);
+  k = std::min(output_height_, k);
+
+  vector<size_t> sorted_index = sort_to_index(result);
+  return vector<int>(sorted_index.begin(), sorted_index.begin() + k);
 }
 
 } // namespace caffe
