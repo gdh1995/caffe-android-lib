@@ -16,7 +16,7 @@ extern "C" {
 #define jni_funcname(name) Java_com_caffe_android_CaffeMobile##name
 
 using caffe::string;
-using vector;
+using caffe::vector;
 
 caffe::CaffeMobile *caffe_mobile = nullptr;
 
@@ -80,11 +80,9 @@ jni_funcname(predict)(JNIEnv* env, jobject thiz)
     vector<float> top = caffe_mobile->predict();
     LOGD("Caffe: top's count is: %d.", top.size());
 
-    count = top.size();
+    int count = top.size();
     jfloatArray ret_arr = env->NewFloatArray(count);
-    for(jsize i = 0; i < K; i++) {
-        ret_arr[i] = top[i];
-    }
+    env->SetFloatArrayRegion(ret_arr, 0, count, top.data());
     return ret_arr;
 }
 
@@ -93,14 +91,12 @@ jni_funcname(predictTopK)(JNIEnv* env, jobject thiz, jstring imgPath, jint K)
 {
     CHECK(caffe_mobile != NULL);
     const char *img_path = env->GetStringUTFChars(imgPath, 0);
-    vector<int> top_k = caffe_mobile->predict_top_k(img_path), K);
+    vector<int> top_k = caffe_mobile->predict_top_k(img_path, K);
     LOGD("top-1 result: %d", top_k[0]);
 
     K = top_k.size();
     jintArray ret_arr = env->NewIntArray(K);
-    for(jsize i = 0; i < K; i++) {
-        ret_arr[i] = top_k[i];
-    }
+    env->SetIntArrayRegion(ret_arr, 0, K, top_k.data());
     env->ReleaseStringUTFChars(imgPath, img_path);
     return ret_arr;
 }
