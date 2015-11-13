@@ -1,4 +1,6 @@
 #include <string>
+#include <android/log.h>
+#include <sstream>
 #include "caffe_mobile.hpp"
 
 using std::string;
@@ -13,6 +15,13 @@ using caffe::Net;
 using caffe::shared_ptr;
 using caffe::vector;
 using caffe::MemoryDataLayer;
+
+#define  LOG_TAG    "CaffeMobile"
+#define  LOGV(...)  __android_log_print(ANDROID_LOG_VERBOSE,LOG_TAG, __VA_ARGS__)
+#define  LOGD(...)  __android_log_print(ANDROID_LOG_DEBUG,LOG_TAG, __VA_ARGS__)
+#define  LOGI(...)  __android_log_print(ANDROID_LOG_INFO,LOG_TAG, __VA_ARGS__)
+#define  LOGW(...)  __android_log_print(ANDROID_LOG_WARN,LOG_TAG, __VA_ARGS__)
+#define  LOGE(...)  __android_log_print(ANDROID_LOG_ERROR,LOG_TAG, __VA_ARGS__)
 
 namespace caffe {
 
@@ -42,7 +51,7 @@ CaffeMobile::CaffeMobile(string model_path, string weights_path)
   caffe_net_ = new Net<float>(model_path, caffe::TEST);
   caffe_net_->CopyTrainedLayersFrom(weights_path);
   clock_t t_end = clock();
-  LOG(INFO) << "Loading time: " << 1000.0 * (t_end - t_start) / CLOCKS_PER_SEC << " ms.";
+  LOGI("%s: %g ms.", "Loading time", 1000.0 * (t_end - t_start) / CLOCKS_PER_SEC);
 }
 
 CaffeMobile::~CaffeMobile() {
@@ -80,7 +89,7 @@ vector<float> CaffeMobile::predict() {
   const Blob<float>& result = *caffe_net_->Forward(dummy_bottom_vec, &loss)[0];
   time = clock() - time;
   test_time_ = 1000.0 * time / CLOCKS_PER_SEC;
-  LOG(INFO) << "Prediction time: " << test_time_ << " ms.";
+  LOGI("%s: %g ms.", "Prediction time: ", test_time_);
 
   const vector<float> probs = vector<float>(result.cpu_data(), result.cpu_data() + result.count());
   output_num_ = result.num();
@@ -88,10 +97,12 @@ vector<float> CaffeMobile::predict() {
 
   const float* result_data = result.cpu_data();
   for (int i = 0; i < (output_num_ > 10 ? output_num_ : 10); i++) {
-    auto &log = LOG(DEBUG) << "  Image#"<< i << ":";
+    ostringstream log;
+    log << "  Image#"<< i << ":";
     for (int j = 0; j < (output_height_ < 3 ? output_height_ : 3); j++) {
       log << " " << result_data[i * result.height() + j];
     }
+    LOGV("%s", log.str().c_str());
   }
   
   vector<float> result_copy(result.count());

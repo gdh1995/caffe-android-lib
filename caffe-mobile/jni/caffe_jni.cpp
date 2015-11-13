@@ -5,7 +5,7 @@
 
 #include "caffe_mobile.hpp"
 
-#define  LOG_TAG    "MiRA-CNN"
+#define  LOG_TAG    "CaffeMobile"
 #define  LOGV(...)  __android_log_print(ANDROID_LOG_VERBOSE,LOG_TAG, __VA_ARGS__)
 #define  LOGD(...)  __android_log_print(ANDROID_LOG_DEBUG,LOG_TAG, __VA_ARGS__)
 #define  LOGI(...)  __android_log_print(ANDROID_LOG_INFO,LOG_TAG, __VA_ARGS__)
@@ -100,7 +100,7 @@ jni_funcname(predictTopK)(JNIEnv* env, jobject thiz, jstring imgPath, jint K)
     CHECK(caffe_mobile != NULL);
     const char *img_path = env->GetStringUTFChars(imgPath, 0);
     vector<int> top_k = caffe_mobile->predict_top_k(img_path, K);
-    LOGI("top-1 result: %d", top_k[0]);
+    LOGD("top-1 result: %d", top_k[0]);
 
     K = top_k.size();
     jintArray ret_arr = env->NewIntArray(K);
