@@ -67,10 +67,8 @@ int CaffeMobile::set_images(const vector<string> &img_paths) {
   vector<Datum> datumVector(img_paths.size());
   const shared_ptr<MemoryDataLayer<float>> memory_data_layer =
     static_pointer_cast<MemoryDataLayer<float>>(caffe_net_->layer_by_name("data"));
-  const bool has_crop = memory_data_layer->layer_param().transform_param().crop_size() != 0,
-    is_color = memory_data_layer->channels() > 1;
-  const int height = has_crop ? 0 : memory_data_layer->height(),
-    width = has_crop ? 0 : memory_data_layer->width();
+  const bool is_color = memory_data_layer->channels() > 1;
+  const int height = memory_data_layer->height(), width = memory_data_layer->width();
   for (int i = 0; i < img_paths.size(); i++) {
     CHECK(ReadImageToDatum(img_paths[i], 0, height, width, is_color, &datumVector[i]));
   }
