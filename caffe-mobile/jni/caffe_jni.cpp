@@ -1,6 +1,7 @@
 #include <jni.h>
 #include <android/log.h>
 #include <string>
+#include <unistd.h>
 
 #include "caffe_mobile.hpp"
 
@@ -13,7 +14,7 @@
 
 extern "C" {
 
-#define jni_funcname(name) Java_com_caffe_android_CaffeMobile##name
+#define jni_funcname(name) Java_com_caffe_android_CaffeMobile_##name
 
 using caffe::string;
 using caffe::vector;
@@ -62,12 +63,19 @@ jni_funcname(enableLog)(JNIEnv* env, jobject thiz, jboolean enabled)
 }
 
 jint JNIEXPORT JNICALL
-jni_funcname(loadModel)(JNIEnv* env, jobject thiz, jstring modelPath, jstring weightsPath)
+jni_funcname(loadModelOnce)(JNIEnv* env, jobject thiz, jstring modelPath, jstring weightsPath)
 {
     delete caffe_mobile;
     const char *model_path = env->GetStringUTFChars(modelPath, 0);
     const char *weights_path = env->GetStringUTFChars(weightsPath, 0);
-    caffe_mobile = new caffe::CaffeMobile(model_path, weights_path);
+    const string model_path_str(model_path);
+    const int slash_pos = model_path_str.find_last_of('/');
+    if (slash_pos > 0) {
+      const string new_dir = model_path_str.substr(0, slash_pos);
+      chdir(new_dir.c_str());
+      LOGW("%s: %s", "change current directory to", new_dir);
+    }
+    caffe_mobile = new caffe::CaffeMobile(model_path_str, weights_path);
     env->ReleaseStringUTFChars(modelPath, model_path);
     env->ReleaseStringUTFChars(weightsPath, weights_path);
     return 0;
@@ -78,7 +86,7 @@ jni_funcname(predict)(JNIEnv* env, jobject thiz)
 {
     CHECK(caffe_mobile != NULL);
     vector<float> top = caffe_mobile->predict();
-    LOGD("Caffe: top's count is: %d.", top.size());
+    LOGV("Caffe: top's count is: %d.", top.size());
 
     int count = top.size();
     jfloatArray ret_arr = env->NewFloatArray(count);
@@ -92,7 +100,7 @@ jni_funcname(predictTopK)(JNIEnv* env, jobject thiz, jstring imgPath, jint K)
     CHECK(caffe_mobile != NULL);
     const char *img_path = env->GetStringUTFChars(imgPath, 0);
     vector<int> top_k = caffe_mobile->predict_top_k(img_path, K);
-    LOGD("top-1 result: %d", top_k[0]);
+    LOGI("top-1 result: %d", top_k[0]);
 
     K = top_k.size();
     jintArray ret_arr = env->NewIntArray(K);

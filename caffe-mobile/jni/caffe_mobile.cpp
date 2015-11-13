@@ -42,7 +42,7 @@ CaffeMobile::CaffeMobile(string model_path, string weights_path)
   caffe_net_ = new Net<float>(model_path, caffe::TEST);
   caffe_net_->CopyTrainedLayersFrom(weights_path);
   clock_t t_end = clock();
-  LOG(DEBUG) << "Loading time: " << 1000.0 * (t_end - t_start) / CLOCKS_PER_SEC << " ms.";
+  LOG(INFO) << "Loading time: " << 1000.0 * (t_end - t_start) / CLOCKS_PER_SEC << " ms.";
 }
 
 CaffeMobile::~CaffeMobile() {
@@ -77,23 +77,23 @@ vector<float> CaffeMobile::predict() {
   float loss;
 
   clock_t time = clock();
-  const Blob<float>& result = *caffe_net_->Forward(dummy_bottom_vec, &loss)[1];
+  const Blob<float>& result = *caffe_net_->Forward(dummy_bottom_vec, &loss)[0];
   time = clock() - time;
   test_time_ = 1000.0 * time / CLOCKS_PER_SEC;
-  LOG(DEBUG) << "Prediction time: " << test_time_ << " ms.";
+  LOG(INFO) << "Prediction time: " << test_time_ << " ms.";
 
   const vector<float> probs = vector<float>(result.cpu_data(), result.cpu_data() + result.count());
+  output_num_ = result.num();
+  output_height_ = result.count(1);
 
   const float* result_data = result.cpu_data();
-  for (int i = 0; i < result.num(); i++) {
-    auto &log = LOG(INFO) << "  Image: "<< i << " class:";
-    for (int j = 0; j < result.height(); j++) {
+  for (int i = 0; i < (output_num_ > 10 > output_num : 10); i++) {
+    auto &log = LOG(DEBUG) << "  Image#"<< i << ":";
+    for (int j = 0; j < (output_height_ < 3 ? output_height_ : 3); j++) {
       log << " " << result_data[i * result.height() + j];
     }
   }
   
-  output_height_ = result.height();
-  output_num_ = result.num();
   vector<float> result_copy(result.count());
   caffe_copy(result.count(), result_data, result_copy.data());
   return result_copy;
