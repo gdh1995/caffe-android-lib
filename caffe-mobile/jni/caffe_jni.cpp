@@ -73,7 +73,7 @@ jni_funcname(loadModelOnce)(JNIEnv* env, jobject thiz, jstring modelPath, jstrin
     if (slash_pos > 0) {
       const string new_dir = model_path_str.substr(0, slash_pos);
       chdir(new_dir.c_str());
-      LOGW("%s: %s", "change current directory to", new_dir);
+      LOGW("%s: %s", "change current directory to", new_dir.c_str());
     }
     caffe_mobile = new caffe::CaffeMobile(model_path_str, weights_path);
     env->ReleaseStringUTFChars(modelPath, model_path);

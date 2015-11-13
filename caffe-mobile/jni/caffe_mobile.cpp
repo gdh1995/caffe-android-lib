@@ -87,7 +87,7 @@ vector<float> CaffeMobile::predict() {
   output_height_ = result.count(1);
 
   const float* result_data = result.cpu_data();
-  for (int i = 0; i < (output_num_ > 10 > output_num : 10); i++) {
+  for (int i = 0; i < (output_num_ > 10 ? output_num_ : 10); i++) {
     auto &log = LOG(DEBUG) << "  Image#"<< i << ":";
     for (int j = 0; j < (output_height_ < 3 ? output_height_ : 3); j++) {
       log << " " << result_data[i * result.height() + j];
