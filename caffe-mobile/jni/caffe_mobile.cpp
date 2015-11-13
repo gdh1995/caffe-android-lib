@@ -96,13 +96,15 @@ vector<float> CaffeMobile::predict() {
   output_height_ = result.count(1);
 
   const float* result_data = result.cpu_data();
-  for (int i = 0; i < (output_num_ > 10 ? output_num_ : 10); i++) {
-    ostringstream log;
-    log << "  Image#"<< i << ":";
-    for (int j = 0; j < (output_height_ < 3 ? output_height_ : 3); j++) {
-      log << " " << result_data[i * result.height() + j];
+  if (output_height_ <= 20) {
+    for (int i = 0; i < (output_num_ < 10 ? output_num_ : 10); i++) {
+      ostringstream log;
+      log << "  Image#"<< i << ":";
+      for (int j = 0; j < output_height_; j++) {
+        log << " " << result_data[i * output_height_ + j];
+      }
+      LOGV("%s", log.str().c_str());
     }
-    LOGV("%s", log.str().c_str());
   }
   
   vector<float> result_copy(result.count());
