@@ -1,7 +1,7 @@
 [submodule "caffe-mobile/jni/caffe"]
 	path = caffe-mobile/jni/caffe
 	url=https://github.com/gdh1995/caffe.git
-	branch = mobile
+	branch = faster-rcnn
 [submodule "Boost-for-Android"]
 	path = Boost-for-Android
 	url = https://github.com/sh1r0/Boost-for-Android.git
